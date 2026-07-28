@@ -10,28 +10,23 @@ st.set_page_config(
 )
 
 # ==============================================================================
-# 1. DATOS DE ENTRADA: SALMUERA CONCENTRADA DE RO
+# 1. DATOS CONSTANTES Y PESOS MOLARES
 # ==============================================================================
 MOLAR_MASS = {
     'Li': 6.941, 'Na': 22.989, 'K': 39.098, 'Mg': 24.305, 'Ca': 40.078,
     'B': 10.811, 'SO4': 96.060, 'Cl': 35.453, 'CO3': 60.009, 'HCO3': 61.017
 }
 
-SALMUERA_RO_INIT = {
-    'Li': 1809.32, 'Na': 1212.51, 'K': 82.44, 'Mg': 10.34, 'Ca': 5.69,
-    'B': 387.88, 'SO4': 2494.47, 'Cl': 10032.56, 'CO3': 0.01, 'HCO3': 0.21
-}
-
 # Selectividad iónica (Dow FilmTec NF270 / Desal DL)
 RECHAZO_NF = {
-    'Li': 0.150,   # 15% retenido -> 85% pasa al PERMEADO (Producto)
-    'Na': 0.200,   # 20% retenido -> 80% pasa al permeado
+    'Li': 0.150,    # 15% retenido -> 85% pasa al PERMEADO (Producto)
+    'Na': 0.200,    # 20% retenido -> 80% pasa al permeado
     'K': 0.150,
-    'Mg': 0.960,   # 96% retenido en el rechazo
-    'Ca': 0.950,   # 95% retenido en el rechazo
-    'B': 0.150,    # Ácido bórico neutro pasa fácilmente
-    'SO4': 0.985,  # 98.5% RETENIDO -> Separación excelente del sulfato
-    'Cl': 0.150,   # Pasa para mantener neutralidad eléctrica
+    'Mg': 0.960,    # 96% retenido en el rechazo
+    'Ca': 0.950,    # 95% retenido en el rechazo
+    'B': 0.150,     # Ácido bórico neutro pasa fácilmente
+    'SO4': 0.985,   # 98.5% RETENIDO -> Separación excelente del sulfato
+    'Cl': 0.150,    # Pasa para mantener neutralidad eléctrica
     'CO3': 0.950,
     'HCO3': 0.300
 }
@@ -45,17 +40,17 @@ def calcular_presion_osmotica(concentraciones_mg_l, temp_c):
     molaridad_total = sum((conc / 1000.0) / MOLAR_MASS[ion] for ion, conc in concentraciones_mg_l.items())
     return molaridad_total * r_const * temp_k
 
-def simular_nanofiltracion(q_feed, rec_target, p_oper, temp_c, a_perm):
+def simular_nanofiltracion(q_feed, rec_target, p_oper, temp_c, a_perm, salmuera_init):
     rec_frac = rec_target / 100.0
     q_perm = q_feed * rec_frac
     q_conc = q_feed - q_perm
 
-    pi_feed = calcular_presion_osmotica(SALMUERA_RO_INIT, temp_c)
+    pi_feed = calcular_presion_osmotica(salmuera_init, temp_c)
 
     conc_reject = {}
     conc_perm = {}
 
-    for ion, c_feed in SALMUERA_RO_INIT.items():
+    for ion, c_feed in salmuera_init.items():
         r_ion = RECHAZO_NF[ion]
         c_p = c_feed * (1.0 - r_ion)
         conc_perm[ion] = c_p
@@ -105,25 +100,46 @@ with st.sidebar:
     rec_in = st.slider("4. Recuperación de Permeado (%)", min_value=10.0, max_value=95.0, value=75.0, step=1.0, help="Típico: 70-85%")
     a_in = st.number_input("5. Permeabilidad Membrana 'A' (L/m²·h·bar)", min_value=0.1, value=5.0, step=0.1, help="Típico: 4.0 - 6.5")
 
+    st.markdown("---")
+    st.header("🧪 Composición Salmuera Alimentación")
+    st.markdown("Ingrese las concentraciones iniciales (mg/L):")
+    
+    # Valores predeterminados iniciales
+    default_salmuera = {
+        'Li': 1809.32, 'Na': 1212.51, 'K': 82.44, 'Mg': 10.34, 'Ca': 5.69,
+        'B': 387.88, 'SO4': 2494.47, 'Cl': 10032.56, 'CO3': 0.01, 'HCO3': 0.21
+    }
+    
+    salmuera_ro_init = {}
+    with st.expander("Modificar concentraciones iónicas", expanded=True):
+        for ion, default_val in default_salmuera.items():
+            salmuera_ro_init[ion] = st.number_input(
+                f"[{ion}] (mg/L)", 
+                min_value=0.0, 
+                value=float(default_val), 
+                step=0.1, 
+                format="%.2f"
+            )
+
 # ==============================================================================
 # 4. EJECUCIÓN Y REPORTE VISUAL DE INGENIERÍA
 # ==============================================================================
 try:
-    res = simular_nanofiltracion(q_in, rec_in, p_in, t_in, a_in)
+    res = simular_nanofiltracion(q_in, rec_in, p_in, t_in, a_in, salmuera_ro_init)
     
     # Cálculos de rendimiento
-    li_in = SALMUERA_RO_INIT['Li']
+    li_in = salmuera_ro_init['Li']
     li_perm = res['conc_perm']['Li']
     li_conc = res['conc_reject']['Li']
 
-    so4_in = SALMUERA_RO_INIT['SO4']
+    so4_in = salmuera_ro_init['SO4']
     so4_perm = res['conc_perm']['SO4']
     so4_conc = res['conc_reject']['SO4']
 
     masa_li_feed = res['q_feed'] * li_in
     masa_li_perm = res['q_perm'] * li_perm
-    rendimiento_li = (masa_li_perm / masa_li_feed) * 100.0
-    red_sulfatos = (1.0 - (so4_perm / so4_in)) * 100.0
+    rendimiento_li = (masa_li_perm / masa_li_feed) * 100.0 if masa_li_feed > 0 else 0.0
+    red_sulfatos = (1.0 - (so4_perm / so4_in)) * 100.0 if so4_in > 0 else 0.0
     
     # SECCIÓN 1: INDICADORES PRINCIPALES (KPIs)
     st.markdown("### 📊 Indicadores Clave del Proceso (Permeado Producto)")
@@ -146,10 +162,10 @@ try:
     with tab1:
         st.markdown("#### Perfil Químico de Corrientes")
         df_quimico = pd.DataFrame({
-            'Ion / Especie': list(SALMUERA_RO_INIT.keys()),
-            'Alimentación RO out (mg/L)': [SALMUERA_RO_INIT[k] for k in SALMUERA_RO_INIT],
-            'PERMEADO - Producto Li purificado (mg/L)': [res['conc_perm'][k] for k in SALMUERA_RO_INIT],
-            'RECHAZO - Desecho rico en Sulfatos (mg/L)': [res['conc_reject'][k] for k in SALMUERA_RO_INIT]
+            'Ion / Especie': list(salmuera_ro_init.keys()),
+            'Alimentación RO out (mg/L)': [salmuera_ro_init[k] for k in salmuera_ro_init],
+            'PERMEADO - Producto Li purificado (mg/L)': [res['conc_perm'][k] for k in salmuera_ro_init],
+            'RECHAZO - Desecho rico en Sulfatos (mg/L)': [res['conc_reject'][k] for k in salmuera_ro_init]
         })
         st.dataframe(df_quimico.round(2), use_container_width=True, hide_index=True)
         
