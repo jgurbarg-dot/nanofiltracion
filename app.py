@@ -10,6 +10,33 @@ st.set_page_config(
 )
 
 # ==============================================================================
+# 0. SISTEMA DE SEGURIDAD (CONTRASEÑA)
+# ==============================================================================
+def check_password():
+    """Verifica la contraseña antes de cargar el resto de la aplicación."""
+    if "password_correct" not in st.session_state:
+        st.session_state["password_correct"] = False
+
+    if not st.session_state["password_correct"]:
+        st.warning("🔒 Por favor, ingresa la contraseña para acceder al simulador.")
+        password = st.text_input("Contraseña", type="password")
+        
+        if st.button("Ingresar"):
+            # Verificación de tu contraseña exacta
+            if password == "AdeIri61Azu":
+                st.session_state["password_correct"] = True
+                st.rerun()  # Recarga la página para mostrar el contenido
+            else:
+                st.error("❌ Contraseña incorrecta.")
+        
+        # st.stop() detiene la ejecución del script aquí. 
+        # Ningún código de abajo se ejecutará hasta que se ingrese la clave.
+        st.stop()
+
+# Activamos el candado de seguridad
+check_password()
+
+# ==============================================================================
 # 1. DATOS CONSTANTES Y PESOS MOLARES
 # ==============================================================================
 MOLAR_MASS = {
